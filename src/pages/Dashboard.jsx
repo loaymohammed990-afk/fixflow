@@ -1,7 +1,7 @@
 import DeviceCard from "../components/DeviceCard";
 import { ORDER_STATUSES } from "../data/mockOrders";
 
-export default function Dashboard({ orders, onFilter, onOpen, onNew }) {
+export default function Dashboard({ summary, onFilter, onOpen, onNew }) {
   const stats = [
     { title: "إجمالي الطلبات", filter: "", icon: "▦", color: "green" },
     {
@@ -23,11 +23,7 @@ export default function Dashboard({ orders, onFilter, onOpen, onNew }) {
       color: "blue",
     },
   ];
-  const latest = [...orders]
-    .sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt) || b.id - a.id,
-    )
-    .slice(0, 5);
+  const latest = summary.recentOrders;
   return (
     <>
       <div className="page-heading">
@@ -55,8 +51,8 @@ export default function Dashboard({ orders, onFilter, onOpen, onNew }) {
             </span>
             <strong>
               {stat.filter
-                ? orders.filter((order) => order.status === stat.filter).length
-                : orders.length}
+                ? summary.byStatus[stat.filter]
+                : summary.totalOrders}
             </strong>
             <span className="stat-bottom">
               عرض الطلبات <span aria-hidden="true">←</span>
@@ -80,7 +76,7 @@ export default function Dashboard({ orders, onFilter, onOpen, onNew }) {
               <DeviceCard key={order.id} order={order} onOpen={onOpen} />
             ))}
           </div>
-          {!orders.length && (
+          {!summary.totalOrders && (
             <div className="empty-state">
               <h3>ابدأ بأول طلب صيانة</h3>
               <button className="button primary" onClick={onNew}>

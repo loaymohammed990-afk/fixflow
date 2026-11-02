@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-export default function ConfirmDialog({ orderId, onConfirm, onClose }) {
+export default function ConfirmDialog({ orderId, onConfirm, onClose, busy, error }) {
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -27,7 +27,7 @@ export default function ConfirmDialog({ orderId, onConfirm, onClose }) {
       className="confirm-dialog"
       aria-labelledby="confirm-title"
       aria-describedby="confirm-description"
-      onCancel={onClose}
+      onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
       onKeyDown={keepFocusInDialog}
     >
       <div className="dialog-icon" aria-hidden="true">
@@ -38,12 +38,13 @@ export default function ConfirmDialog({ orderId, onConfirm, onClose }) {
         ستتغير حالة الطلب إلى «ملغي». سيبقى سجل الطلب موجودًا، ويمكن تغيير حالته
         لاحقًا.
       </p>
+      {error && <p className="field-error" role="alert">{error}</p>}
       <div className="actions">
-        <button className="button secondary" autoFocus onClick={onClose}>
+        <button className="button secondary" autoFocus disabled={busy} onClick={onClose}>
           تراجع
         </button>
-        <button className="button danger" onClick={onConfirm}>
-          تأكيد الإلغاء
+        <button className="button danger" disabled={busy} onClick={onConfirm}>
+          {busy ? "جارٍ الحفظ..." : "تأكيد الإلغاء"}
         </button>
       </div>
     </dialog>

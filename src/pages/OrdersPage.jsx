@@ -1,8 +1,10 @@
+import { useState } from "react";
+import { api } from "../api/client";
+import { useResource, ResourceState } from "../api/useResource";
 import DeviceCard from "../components/DeviceCard";
 import { ORDER_STATUSES } from "../data/mockOrders";
 
 export default function OrdersPage({
-  orders,
   query,
   onQuery,
   statusFilter,
@@ -10,20 +12,16 @@ export default function OrdersPage({
   onOpen,
   onNew,
 }) {
-  const normalizedQuery = query
-    .trim()
-    .toLowerCase()
-    .replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit));
-  const filtered = orders.filter(
-    (order) =>
-      (!statusFilter || order.status === statusFilter) &&
-      [order.id, order.customerName, order.deviceName, order.phone].some(
-        (value) => String(value).toLowerCase().includes(normalizedQuery),
-      ),
-  );
+  const [page, setPage] = useState(1);
+  const [retry, setRetry] = useState(0);
+  const resource = useResource(signal => api.getOrders({ search: query, status: statusFilter, page, limit: 10 }, signal), [query, statusFilter, page, retry], true, 300);
+  const orders = resource.result?.data || [];
+  const meta = resource.result?.meta;
+  function changeQuery(value) { setPage(1); onQuery(value); }
+  function changeFilter(value) { setPage(1); onFilter(value); }
   function reset() {
-    onQuery("");
-    onFilter("");
+    changeQuery("");
+    changeFilter("");
   }
   return (
     <>
@@ -44,8 +42,9 @@ export default function OrdersPage({
             <input
               id="search"
               type="search"
+              maxLength={100}
               value={query}
-              onChange={(event) => onQuery(event.target.value)}
+              onChange={(event) => changeQuery(event.target.value)}
               placeholder="اسم العميل، رقم الطلب، الجهاز أو الهاتف…"
             />
           </div>
@@ -54,7 +53,7 @@ export default function OrdersPage({
             <select
               id="status-filter"
               value={statusFilter}
-              onChange={(event) => onFilter(event.target.value)}
+              onChange={(event) => changeFilter(event.target.value)}
             >
               <option value="">جميع الحالات</option>
               {ORDER_STATUSES.map((status) => (
@@ -67,32 +66,38 @@ export default function OrdersPage({
           </button>
         </div>
         <div className="results-count" role="status">
-          {filtered.length} من {orders.length} طلبات
+          {!resource.loading && !resource.error && meta ? `${meta.total} طلبات — صفحة ${meta.page} من ${meta.totalPages}` : ""}
         </div>
+        <ResourceState resource={resource} onRetry={() => setRetry(v => v + 1)} />
         <div className="device-list">
-          {filtered.map((order) => (
+          {!resource.loading && !resource.error && orders.map((order) => (
             <DeviceCard key={order.id} order={order} onOpen={onOpen} />
           ))}
         </div>
-        {!filtered.length && (
+        {!resource.loading && !resource.error && !orders.length && (
           <div className="empty-state">
             <span aria-hidden="true">⌕</span>
             <h2>
-              {orders.length ? "لا توجد طلبات مطابقة" : "لا توجد طلبات بعد"}
+              {query || statusFilter ? "لا توجد طلبات مطابقة" : "لا توجد طلبات بعد"}
             </h2>
             <p>
-              {orders.length
+              {query || statusFilter
                 ? "جرّب اسمًا آخر أو امسح الفلاتر لعرض كل الطلبات."
                 : "أضف أول جهاز لبدء متابعة الصيانة."}
             </p>
             <button
               className="button primary"
-              onClick={orders.length ? reset : onNew}
+              onClick={query || statusFilter ? reset : onNew}
             >
-              {orders.length ? "مسح الفلاتر" : "إضافة أول طلب"}
+              {query || statusFilter ? "مسح الفلاتر" : "إضافة أول طلب"}
             </button>
           </div>
         )}
+        {meta && meta.totalPages > 1 && <div className="actions pagination" aria-label="صفحات الطلبات">
+          <button className="button secondary" disabled={resource.loading || page <= 1} onClick={() => setPage(v => v - 1)}>السابق</button>
+          <span>{page} / {meta.totalPages}</span>
+          <button className="button secondary" disabled={resource.loading || page >= meta.totalPages} onClick={() => setPage(v => v + 1)}>التالي</button>
+        </div>}
       </section>
     </>
   );

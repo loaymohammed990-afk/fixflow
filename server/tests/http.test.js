@@ -1,0 +1,27 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { createApp } from '../src/app.js';
+test('offline health, unknown route, malformed JSON, CORS and Swagger', async t => {
+  const server = createApp().listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  let response = await fetch(`${base}/api/v1/health`);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error.code, 'DATABASE_UNAVAILABLE');
+  response = await fetch(`${base}/unknown`);
+  assert.equal(response.status, 404); assert.deepEqual((await response.json()).error.details, []);
+  response = await fetch(`${base}/api/v1/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{bad' });
+  assert.equal(response.status, 400);
+  response = await fetch(`${base}/api/v1/orders`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'bad' });
+  assert.equal(response.status, 415);
+  response = await fetch(`${base}/api/v1/health`, { headers: { Origin: 'https://example.com' } });
+  assert.equal(response.status, 403);
+  response = await fetch(`${base}/api/v1/health`, { headers: { Origin: 'http://127.0.0.1:5173' } });
+  assert.equal(response.headers.get('access-control-allow-origin'), 'http://127.0.0.1:5173');
+  response = await fetch(`${base}/api/v1/health`, { headers: { Origin: 'http://127.0.0.1:4000' } });
+  assert.equal(response.headers.get('access-control-allow-origin'), 'http://127.0.0.1:4000');
+  response = await fetch(`${base}/api-docs/`);
+  assert.equal(response.status, 200); assert.match(await response.text(), /swagger-ui/);
+});

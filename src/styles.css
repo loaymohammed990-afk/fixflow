@@ -1056,3 +1056,5 @@ select[aria-invalid="true"] {
     scroll-behavior: auto !important;
   }
 }
+button:disabled { opacity: .6; cursor: wait; }
+.pagination { padding: 1rem; flex-wrap: wrap; justify-content: center; align-items: center; }

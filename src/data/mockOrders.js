@@ -13,7 +13,7 @@ export const STATUS_CLASSES = [
   "cancelled",
 ];
 
-// بيانات تمثيلية فقط، تُستعاد عند تحديث الصفحة.
+// بيانات تمثيلية اختيارية لـ Seed فقط؛ بيانات التشغيل تأتي من MongoDB.
 export const mockOrders = [
   {
     id: 1042,

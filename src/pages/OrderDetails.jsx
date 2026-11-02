@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import StatusBadge from "../components/StatusBadge";
 import ConfirmDialog from "../components/ConfirmDialog";
 import OrderForm from "../components/OrderForm";
@@ -7,6 +7,16 @@ import { ORDER_STATUSES } from "../data/mockOrders";
 export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const inFlight = useRef(false);
+  async function saveStatus(status) {
+    if (inFlight.current) return;
+    inFlight.current = true; setSaving(true); setError("");
+    try { await onStatus(order.id, status); setConfirming(false); }
+    catch (failure) { setError(failure.message); }
+    finally { inFlight.current = false; setSaving(false); }
+  }
   if (!order)
     return (
       <div className="empty-state">
@@ -19,7 +29,7 @@ export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
 
   function changeStatus(status) {
     if (status === ORDER_STATUSES[4]) setConfirming(true);
-    else onStatus(order.id, status);
+    else saveStatus(status);
   }
 
   return (
@@ -41,11 +51,12 @@ export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
         </div>
         <StatusBadge status={order.status} />
       </div>
+      {error && !confirming && <p role="alert" className="field-error">{error}</p>}
       {editing ? (
         <OrderForm
           order={order}
-          onSave={(values) => {
-            onUpdate(order.id, values);
+          onSave={async (values) => {
+            await onUpdate(order.id, values);
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
@@ -95,6 +106,7 @@ export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
             <label htmlFor="order-status">الحالة الحالية</label>
             <select
               id="order-status"
+              disabled={saving}
               value={order.status}
               onChange={(event) => changeStatus(event.target.value)}
             >
@@ -110,7 +122,7 @@ export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
               <p>يبقى الطلب في السجل بعد إلغائه.</p>
               <button
                 className="button danger-outline"
-                disabled={order.status === ORDER_STATUSES[4]}
+                disabled={saving || order.status === ORDER_STATUSES[4]}
                 onClick={() => setConfirming(true)}
               >
                 إلغاء الطلب
@@ -122,11 +134,10 @@ export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
       {confirming && (
         <ConfirmDialog
           orderId={order.id}
-          onClose={() => setConfirming(false)}
-          onConfirm={() => {
-            onStatus(order.id, ORDER_STATUSES[4]);
-            setConfirming(false);
-          }}
+          busy={saving}
+          error={error}
+          onClose={() => { if (!saving) { setConfirming(false); setError(""); } }}
+          onConfirm={() => saveStatus(ORDER_STATUSES[4])}
         />
       )}
     </>

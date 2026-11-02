@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 const emptyOrder = {
   customerName: "",
@@ -10,8 +10,12 @@ const emptyOrder = {
 };
 
 export default function OrderForm({ order, onSave, onCancel }) {
-  const [values, setValues] = useState(order || emptyOrder);
+  const [values, setValues] = useState(() => Object.fromEntries(Object.keys(emptyOrder).map(key => [key, order?.[key] || ""])));
   const [errors, setErrors] = useState({});
+
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const inFlight = useRef(false);
 
   function change(event) {
     const { name, value } = event.target;
@@ -19,8 +23,9 @@ export default function OrderForm({ order, onSave, onCancel }) {
     setErrors((current) => ({ ...current, [name]: "" }));
   }
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
+    if (inFlight.current) return;
     const cleaned = Object.fromEntries(
       Object.entries(values).map(([key, value]) => [
         key,
@@ -47,7 +52,11 @@ export default function OrderForm({ order, onSave, onCancel }) {
         .focus();
       return;
     }
-    onSave(cleaned);
+    inFlight.current = true;
+    setSaving(true); setSaveError("");
+    try { await onSave(cleaned); }
+    catch (error) { setSaveError(error.message); setErrors(error.fieldErrors || {}); }
+    finally { inFlight.current = false; setSaving(false); }
   }
 
   function field(name, label, options = {}) {
@@ -187,14 +196,15 @@ export default function OrderForm({ order, onSave, onCancel }) {
           )}
         </div>
       </div>
+      {saveError && <p className="field-error" role="alert">{saveError}</p>}
       <div className="form-footer">
         <small>الحقول المشار إليها بـ * مطلوبة</small>
         <div className="actions">
-          <button type="button" className="button secondary" onClick={onCancel}>
+          <button type="button" disabled={saving} className="button secondary" onClick={onCancel}>
             تراجع
           </button>
-          <button className="button primary" type="submit">
-            {order ? "حفظ التعديلات" : "إضافة الطلب"}
+          <button className="button primary" type="submit" disabled={saving}>
+            {saving ? "جارٍ الحفظ..." : order ? "حفظ التعديلات" : "إضافة الطلب"}
           </button>
         </div>
       </div>

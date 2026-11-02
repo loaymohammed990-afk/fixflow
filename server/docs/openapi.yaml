@@ -1,0 +1,1064 @@
+openapi: 3.0.3
+info:
+  title: FixFlow Local API
+  version: 1.0.0
+  description: واجهة تعليمية محلية ببيانات وهمية. لا مصادقة؛ التشغيل على loopback فقط.
+servers:
+  - url: http://127.0.0.1:4000/api/v1
+tags:
+  - name: Orders
+  - name: Dashboard
+  - name: Health
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: جاهزية قاعدة البيانات
+      responses:
+        "200":
+          description: نجاح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data:
+                  service: FixFlow API
+                  database: connected
+        "403":
+          description: مصدر الطلب غير مسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORIGIN_NOT_ALLOWED
+                  message: مصدر الطلب غير مسموح
+                  details: []
+        "500":
+          description: حدث خطأ داخلي
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INTERNAL_ERROR
+                  message: حدث خطأ داخلي
+                  details: []
+        "503":
+          description: قاعدة البيانات غير متاحة، حاول مجددًا
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: DATABASE_UNAVAILABLE
+                  message: قاعدة البيانات غير متاحة، حاول مجددًا
+                  details: []
+  /orders/statuses:
+    get:
+      tags:
+        - Orders
+      summary: الحالات الخمس بالترتيب
+      responses:
+        "200":
+          description: نجاح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderStatusesResponse"
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data: &a5
+                  - تم الاستلام
+                  - قيد الصيانة
+                  - جاهز للتسليم
+                  - تم التسليم
+                  - ملغي
+        "403":
+          description: مصدر الطلب غير مسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORIGIN_NOT_ALLOWED
+                  message: مصدر الطلب غير مسموح
+                  details: []
+        "500":
+          description: حدث خطأ داخلي
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INTERNAL_ERROR
+                  message: حدث خطأ داخلي
+                  details: []
+        "503":
+          description: قاعدة البيانات غير متاحة، حاول مجددًا
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: DATABASE_UNAVAILABLE
+                  message: قاعدة البيانات غير متاحة، حاول مجددًا
+                  details: []
+  /orders:
+    get:
+      tags:
+        - Orders
+      summary: بحث وتصفية وترقيم صفحات في MongoDB
+      description: "Literal partial search over customerName, deviceName, phone and
+        id. Arabic/Persian digits are normalized. Search AND status. Sort:
+        createdAt desc, id desc. Unknown/repeated parameters are rejected.
+        totalPages is 0 when empty."
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 100
+            default: ""
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - ""
+              - تم الاستلام
+              - قيد الصيانة
+              - جاهز للتسليم
+              - تم التسليم
+              - ملغي
+            default: ""
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: نجاح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrdersPageResponse"
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data:
+                  - &a1
+                    customerName: عميل تجريبي
+                    phone: "0501234567"
+                    deviceType: جوال
+                    deviceName: iPhone 15
+                    serialNumber: SN-DEMO
+                    problem: الشاشة مكسورة
+                    id: 1043
+                    status: تم الاستلام
+                    createdAt: 2026-11-03T10:30:00.000Z
+                    updatedAt: 2026-11-03T10:30:00.000Z
+                meta:
+                  page: 1
+                  limit: 10
+                  total: 1
+                  totalPages: 1
+        "400":
+          description: استعلام غير صالح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INVALID_QUERY
+                  message: استعلام غير صالح
+                  details: []
+        "403":
+          description: مصدر الطلب غير مسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORIGIN_NOT_ALLOWED
+                  message: مصدر الطلب غير مسموح
+                  details: []
+        "500":
+          description: حدث خطأ داخلي
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INTERNAL_ERROR
+                  message: حدث خطأ داخلي
+                  details: []
+        "503":
+          description: قاعدة البيانات غير متاحة، حاول مجددًا
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: DATABASE_UNAVAILABLE
+                  message: قاعدة البيانات غير متاحة، حاول مجددًا
+                  details: []
+    post:
+      tags:
+        - Orders
+      summary: إنشاء طلب
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+            example: &a3
+              customerName: عميل تجريبي
+              phone: "0501234567"
+              deviceType: جوال
+              deviceName: iPhone 15
+              serialNumber: SN-DEMO
+              problem: الشاشة مكسورة
+      responses:
+        "201":
+          description: نجاح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessOrderResponse"
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data: *a1
+        "400":
+          description: استعلام غير صالح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INVALID_QUERY
+                  message: استعلام غير صالح
+                  details: []
+        "403":
+          description: مصدر الطلب غير مسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORIGIN_NOT_ALLOWED
+                  message: مصدر الطلب غير مسموح
+                  details: []
+        "409":
+          description: رقم الطلب موجود بالفعل
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: DUPLICATE_ORDER_ID
+                  message: رقم الطلب موجود بالفعل
+                  details: []
+        "413":
+          description: حجم البيانات أكبر من المسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: حجم البيانات أكبر من المسموح
+                  details: []
+        "415":
+          description: استخدم application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: استخدم application/json
+                  details: []
+        "422":
+          description: يرجى تصحيح البيانات المدخلة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: يرجى تصحيح البيانات المدخلة
+                  details:
+                    - field: phone
+                      message: أدخل رقم هاتف صحيحًا من 7 إلى 15 رقمًا
+        "500":
+          description: حدث خطأ داخلي
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INTERNAL_ERROR
+                  message: حدث خطأ داخلي
+                  details: []
+        "503":
+          description: قاعدة البيانات غير متاحة، حاول مجددًا
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: DATABASE_UNAVAILABLE
+                  message: قاعدة البيانات غير متاحة، حاول مجددًا
+                  details: []
+  /orders/{id}:
+    parameters:
+      - &a2
+        name: id
+        in: path
+        required: true
+        description: رقم الطلب العددي، وليس MongoDB ObjectId
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        example: 1042
+    get:
+      tags:
+        - Orders
+      summary: تفاصيل طلب
+      responses:
+        "200":
+          description: نجاح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessOrderResponse"
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data: *a1
+        "400":
+          description: رقم الطلب غير صالح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INVALID_ORDER_ID
+                  message: رقم الطلب غير صالح
+                  details: []
+        "403":
+          description: مصدر الطلب غير مسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORIGIN_NOT_ALLOWED
+                  message: مصدر الطلب غير مسموح
+                  details: []
+        "404":
+          description: الطلب غير موجود
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORDER_NOT_FOUND
+                  message: الطلب غير موجود
+                  details: []
+        "500":
+          description: حدث خطأ داخلي
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INTERNAL_ERROR
+                  message: حدث خطأ داخلي
+                  details: []
+        "503":
+          description: قاعدة البيانات غير متاحة، حاول مجددًا
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: DATABASE_UNAVAILABLE
+                  message: قاعدة البيانات غير متاحة، حاول مجددًا
+                  details: []
+    patch:
+      tags:
+        - Orders
+      summary: تعديل الحقول الستة فقط
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderRequest"
+            example:
+              problem: تم فحص الشاشة
+      responses:
+        "200":
+          description: نجاح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessOrderResponse"
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data:
+                  customerName: عميل تجريبي
+                  phone: "0501234567"
+                  deviceType: جوال
+                  deviceName: iPhone 15
+                  serialNumber: SN-DEMO
+                  problem: تم فحص الشاشة
+                  id: 1043
+                  status: تم الاستلام
+                  createdAt: 2026-11-03T10:30:00.000Z
+                  updatedAt: 2026-11-03T10:30:00.000Z
+        "400":
+          description: رقم الطلب غير صالح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INVALID_ORDER_ID
+                  message: رقم الطلب غير صالح
+                  details: []
+        "403":
+          description: مصدر الطلب غير مسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORIGIN_NOT_ALLOWED
+                  message: مصدر الطلب غير مسموح
+                  details: []
+        "404":
+          description: الطلب غير موجود
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORDER_NOT_FOUND
+                  message: الطلب غير موجود
+                  details: []
+        "413":
+          description: حجم البيانات أكبر من المسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: حجم البيانات أكبر من المسموح
+                  details: []
+        "415":
+          description: استخدم application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: استخدم application/json
+                  details: []
+        "422":
+          description: يرجى تصحيح البيانات المدخلة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: يرجى تصحيح البيانات المدخلة
+                  details:
+                    - field: phone
+                      message: أدخل رقم هاتف صحيحًا من 7 إلى 15 رقمًا
+        "500":
+          description: حدث خطأ داخلي
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INTERNAL_ERROR
+                  message: حدث خطأ داخلي
+                  details: []
+        "503":
+          description: قاعدة البيانات غير متاحة، حاول مجددًا
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: DATABASE_UNAVAILABLE
+                  message: قاعدة البيانات غير متاحة، حاول مجددًا
+                  details: []
+  /orders/{id}/status:
+    parameters:
+      - *a2
+    patch:
+      tags:
+        - Orders
+      summary: تغيير الحالة؛ يعيد الطلب كاملًا
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStatusRequest"
+            example:
+              status: جاهز للتسليم
+      responses:
+        "200":
+          description: نجاح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessOrderResponse"
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data:
+                  customerName: عميل تجريبي
+                  phone: "0501234567"
+                  deviceType: جوال
+                  deviceName: iPhone 15
+                  serialNumber: SN-DEMO
+                  problem: الشاشة مكسورة
+                  id: 1043
+                  status: جاهز للتسليم
+                  createdAt: 2026-11-03T10:30:00.000Z
+                  updatedAt: 2026-11-03T10:30:00.000Z
+        "400":
+          description: رقم الطلب غير صالح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INVALID_ORDER_ID
+                  message: رقم الطلب غير صالح
+                  details: []
+        "403":
+          description: مصدر الطلب غير مسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORIGIN_NOT_ALLOWED
+                  message: مصدر الطلب غير مسموح
+                  details: []
+        "404":
+          description: الطلب غير موجود
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORDER_NOT_FOUND
+                  message: الطلب غير موجود
+                  details: []
+        "413":
+          description: حجم البيانات أكبر من المسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: حجم البيانات أكبر من المسموح
+                  details: []
+        "415":
+          description: استخدم application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: استخدم application/json
+                  details: []
+        "422":
+          description: يرجى تصحيح البيانات المدخلة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: يرجى تصحيح البيانات المدخلة
+                  details:
+                    - field: phone
+                      message: أدخل رقم هاتف صحيحًا من 7 إلى 15 رقمًا
+        "500":
+          description: حدث خطأ داخلي
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INTERNAL_ERROR
+                  message: حدث خطأ داخلي
+                  details: []
+        "503":
+          description: قاعدة البيانات غير متاحة، حاول مجددًا
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: DATABASE_UNAVAILABLE
+                  message: قاعدة البيانات غير متاحة، حاول مجددًا
+                  details: []
+  /dashboard/summary:
+    get:
+      tags:
+        - Dashboard
+      summary: الإجمالي والحالات وآخر خمسة طلبات
+      responses:
+        "200":
+          description: نجاح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummaryResponse"
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data:
+                  totalOrders: 1
+                  byStatus:
+                    تم الاستلام: 1
+                    قيد الصيانة: 0
+                    جاهز للتسليم: 0
+                    تم التسليم: 0
+                    ملغي: 0
+                  recentOrders:
+                    - *a1
+        "403":
+          description: مصدر الطلب غير مسموح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: ORIGIN_NOT_ALLOWED
+                  message: مصدر الطلب غير مسموح
+                  details: []
+        "500":
+          description: حدث خطأ داخلي
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: INTERNAL_ERROR
+                  message: حدث خطأ داخلي
+                  details: []
+        "503":
+          description: قاعدة البيانات غير متاحة، حاول مجددًا
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: DATABASE_UNAVAILABLE
+                  message: قاعدة البيانات غير متاحة، حاول مجددًا
+                  details: []
+components:
+  schemas:
+    CreateOrderRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - customerName
+        - phone
+        - deviceType
+        - deviceName
+        - problem
+      properties: &a4
+        customerName: &a6
+          type: string
+          minLength: 1
+          maxLength: 100
+        phone:
+          type: string
+          pattern: ^\+?[0-9٠-٩۰-۹]{7,15}$
+          description: Arabic/Persian digits are normalized; surrounding whitespace is
+            trimmed.
+        deviceType: &a7
+          type: string
+          enum:
+            - جوال
+            - لابتوب
+        deviceName: &a8
+          type: string
+          minLength: 1
+          maxLength: 100
+        serialNumber: &a9
+          type: string
+          minLength: 0
+          maxLength: 100
+          default: ""
+        problem: &a10
+          type: string
+          minLength: 1
+          maxLength: 2000
+      example: *a3
+    UpdateOrderRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties: *a4
+      example:
+        problem: تم فحص الشاشة
+    UpdateStatusRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: *a5
+    Order:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - customerName
+        - phone
+        - deviceType
+        - deviceName
+        - serialNumber
+        - problem
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        customerName: *a6
+        phone:
+          type: string
+          pattern: ^\+?[0-9]{7,15}$
+        deviceType: *a7
+        deviceName: *a8
+        serialNumber: *a9
+        problem: *a10
+        status:
+          type: string
+          enum: *a5
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+      example: *a1
+    SuccessOrderResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          enum:
+            - true
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/Order"
+    OrdersPageResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+        - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+            - true
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        meta:
+          type: object
+          required:
+            - page
+            - limit
+            - total
+            - totalPages
+          properties:
+            page:
+              type: integer
+              minimum: 1
+            limit:
+              type: integer
+              minimum: 1
+              maximum: 100
+            total:
+              type: integer
+              minimum: 0
+            totalPages:
+              type: integer
+              minimum: 0
+    DashboardSummaryResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          enum:
+            - true
+        message:
+          type: string
+        data:
+          type: object
+          required:
+            - totalOrders
+            - byStatus
+            - recentOrders
+          properties:
+            totalOrders:
+              type: integer
+              minimum: 0
+            byStatus:
+              type: object
+              additionalProperties: false
+              required: *a5
+              properties:
+                تم الاستلام:
+                  type: integer
+                  minimum: 0
+                قيد الصيانة:
+                  type: integer
+                  minimum: 0
+                جاهز للتسليم:
+                  type: integer
+                  minimum: 0
+                تم التسليم:
+                  type: integer
+                  minimum: 0
+                ملغي:
+                  type: integer
+                  minimum: 0
+            recentOrders:
+              type: array
+              maxItems: 5
+              items:
+                $ref: "#/components/schemas/Order"
+    OrderStatusesResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          enum:
+            - true
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            type: string
+            enum: *a5
+    HealthResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          enum:
+            - true
+        message:
+          type: string
+        data:
+          type: object
+          required:
+            - service
+            - database
+          properties:
+            service:
+              type: string
+            database:
+              type: string
+              enum:
+                - connected
+    ValidationErrorDetail:
+      type: object
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - details
+          properties:
+            code:
+              type: string
+              enum:
+                - INVALID_QUERY
+                - ORIGIN_NOT_ALLOWED
+                - ORDER_NOT_FOUND
+                - DUPLICATE_ORDER_ID
+                - VALIDATION_ERROR
+                - INTERNAL_ERROR
+                - DATABASE_UNAVAILABLE
+                - INVALID_ORDER_ID
+                - NOT_FOUND
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                $ref: "#/components/schemas/ValidationErrorDetail"

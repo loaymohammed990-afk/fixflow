@@ -1,26 +1,27 @@
-import { useRef, useState } from "react";
-import { mockOrders, ORDER_STATUSES } from "./data/mockOrders";
+import { useState } from "react";
+import { api } from "./api/client";
+import { useResource, ResourceState } from "./api/useResource";
 import Dashboard from "./pages/Dashboard";
 import OrdersPage from "./pages/OrdersPage";
 import OrderDetails from "./pages/OrderDetails";
 import OrderForm from "./components/OrderForm";
 
 export default function App() {
-  const [orders, setOrders] = useState(mockOrders);
+  const [order, setOrder] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [feedback, setFeedback] = useState("");
-  const nextId = useRef(
-    Math.max(...mockOrders.map((order) => order.id), 0) + 1,
-  );
+  const [retry, setRetry] = useState(0);
+  const resource = useResource(signal => page === "dashboard" ? api.getDashboardSummary(signal) : api.getOrder(selectedId, signal), [page, selectedId, retry], page === "dashboard" || page === "details");
 
   function navigate(target) {
     setPage(target);
     setFeedback("");
   }
   function openOrder(id) {
+    setOrder(null);
     setSelectedId(id);
     navigate("details");
   }
@@ -29,34 +30,25 @@ export default function App() {
     setStatusFilter(status);
     navigate("orders");
   }
-  function addOrder(values) {
-    const newOrder = {
-      ...values,
-      id: nextId.current++,
-      status: ORDER_STATUSES[0],
-      createdAt: new Date().toISOString(),
-    };
-    setOrders((current) => [newOrder, ...current]);
-    setSelectedId(newOrder.id);
+  async function addOrder(values) {
+    const { data } = await api.createOrder(values);
+    setOrder(data);
+    setSelectedId(data.id);
     setPage("details");
-    setFeedback(`تمت إضافة الطلب #${newOrder.id} بنجاح خلال هذه الجلسة.`);
+    setFeedback(`تم حفظ الطلب #${data.id} بنجاح.`);
+    return data;
   }
-  function updateOrder(id, values) {
-    // map يعيد قائمة جديدة، مع تعديل الطلب المطابق فقط وحفظ رقمه وتاريخه.
-    setOrders((current) =>
-      current.map((order) =>
-        order.id === id
-          ? { ...order, ...values, id: order.id, createdAt: order.createdAt }
-          : order,
-      ),
-    );
+  async function updateOrder(id, values) {
+    const { data } = await api.patchOrder(id, values);
+    setOrder(data);
     setFeedback(`تم حفظ تعديلات الطلب #${id}.`);
+    return data;
   }
-  function updateStatus(id, status) {
-    setOrders((current) =>
-      current.map((order) => (order.id === id ? { ...order, status } : order)),
-    );
-    setFeedback(`تم تحديث حالة الطلب #${id} إلى «${status}».`);
+  async function updateStatus(id, status) {
+    const { data } = await api.patchOrderStatus(id, status);
+    setOrder(data);
+    setFeedback(`تم تحديث حالة الطلب #${id}.`);
+    return data;
   }
 
   return (
@@ -126,9 +118,10 @@ export default function App() {
             </button>
           </div>
         )}
-        {page === "dashboard" && (
+        {(page === "dashboard" || page === "details") && <ResourceState resource={resource} onRetry={() => setRetry(v => v + 1)} />}
+        {page === "dashboard" && !resource.loading && !resource.error && resource.result && (
           <Dashboard
-            orders={orders}
+            summary={resource.result.data}
             onFilter={openOrders}
             onOpen={openOrder}
             onNew={() => navigate("new")}
@@ -136,7 +129,6 @@ export default function App() {
         )}
         {page === "orders" && (
           <OrdersPage
-            orders={orders}
             query={query}
             onQuery={setQuery}
             statusFilter={statusFilter}
@@ -159,10 +151,10 @@ export default function App() {
             <OrderForm onSave={addOrder} onCancel={() => openOrders()} />
           </>
         )}
-        {page === "details" && (
+        {page === "details" && !resource.loading && !resource.error && resource.result && (
           <OrderDetails
             key={selectedId}
-            order={orders.find((order) => order.id === selectedId)}
+            order={order || resource.result.data}
             onUpdate={updateOrder}
             onStatus={updateStatus}
             onBack={() => navigate("orders")}
@@ -171,8 +163,7 @@ export default function App() {
         <div className="session-note">
           <span aria-hidden="true">ⓘ</span>
           <p>
-            <strong>مساحة للتجربة والتعلّم.</strong> البيانات وهمية والتغييرات
-            مؤقتة خلال الجلسة؛ تحديث الصفحة يعيد البيانات الأولية.
+            <strong>مساحة للتجربة والتعلّم.</strong> استخدم بيانات وهمية فقط. تُحفظ الطلبات في MongoDB وتبقى بعد تحديث الصفحة.
           </p>
         </div>
       </main>
