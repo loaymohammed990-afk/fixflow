@@ -4,7 +4,9 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import OrderForm from "../components/OrderForm";
 import { ORDER_STATUSES } from "../data/mockOrders";
 
-export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
+const canceled = ORDER_STATUSES[4];
+
+export default function OrderDetails({ order, isAdmin, onUpdate, onStatus, onBack }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -28,9 +30,11 @@ export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
     );
 
   function changeStatus(status) {
-    if (status === ORDER_STATUSES[4]) setConfirming(true);
+    if (status === canceled) setConfirming(true);
     else saveStatus(status);
   }
+  const canEdit = isAdmin || order.status !== canceled;
+  const statuses = isAdmin || !canEdit ? ORDER_STATUSES : ORDER_STATUSES.filter(status => status !== canceled);
 
   return (
     <>
@@ -66,12 +70,12 @@ export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
           <section className="panel detail-panel">
             <div className="panel-heading">
               <h2>بيانات الطلب</h2>
-              <button
+              {canEdit && <button
                 className="button secondary"
                 onClick={() => setEditing(true)}
               >
                 تعديل البيانات
-              </button>
+              </button>}
             </div>
             <dl className="detail-fields">
               <div>
@@ -106,28 +110,28 @@ export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
             <label htmlFor="order-status">الحالة الحالية</label>
             <select
               id="order-status"
-              disabled={saving}
+              disabled={saving || !canEdit}
               value={order.status}
               onChange={(event) => changeStatus(event.target.value)}
             >
-              {ORDER_STATUSES.map((status) => (
+              {statuses.map((status) => (
                 <option key={status}>{status}</option>
               ))}
             </select>
             <div className="status-preview">
               <StatusBadge status={order.status} />
             </div>
-            <div className="cancel-section">
+            {isAdmin && <div className="cancel-section">
               <h3>إلغاء طلب الصيانة</h3>
               <p>يبقى الطلب في السجل بعد إلغائه.</p>
               <button
                 className="button danger-outline"
-                disabled={saving || order.status === ORDER_STATUSES[4]}
+                disabled={saving || order.status === canceled}
                 onClick={() => setConfirming(true)}
               >
                 إلغاء الطلب
               </button>
-            </div>
+            </div>}
           </aside>
         </div>
       )}
@@ -137,7 +141,7 @@ export default function OrderDetails({ order, onUpdate, onStatus, onBack }) {
           busy={saving}
           error={error}
           onClose={() => { if (!saving) { setConfirming(false); setError(""); } }}
-          onConfirm={() => saveStatus(ORDER_STATUSES[4])}
+          onConfirm={() => saveStatus(canceled)}
         />
       )}
     </>

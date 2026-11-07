@@ -5,20 +5,38 @@ import Dashboard from "./pages/Dashboard";
 import OrdersPage from "./pages/OrdersPage";
 import OrderDetails from "./pages/OrderDetails";
 import OrderForm from "./components/OrderForm";
+import { useAuth } from "./auth/useAuth";
+import ProfilePage, { roleLabels } from "./pages/ProfilePage";
+import UsersPage from "./pages/UsersPage";
 
 export default function App() {
+  const { user, logout } = useAuth();
+  const isAdmin = user.role === "admin";
   const [order, setOrder] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [logoutError, setLogoutError] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
   const [retry, setRetry] = useState(0);
   const resource = useResource(signal => page === "dashboard" ? api.getDashboardSummary(signal) : api.getOrder(selectedId, signal), [page, selectedId, retry], page === "dashboard" || page === "details");
 
   function navigate(target) {
     setPage(target);
     setFeedback("");
+  }
+  async function signOut() {
+    setLoggingOut(true);
+    setLogoutError("");
+    try {
+      await logout();
+    } catch (error) {
+      setLogoutError(error.message);
+    } finally {
+      setLoggingOut(false);
+    }
   }
   function openOrder(id) {
     setOrder(null);
@@ -95,11 +113,21 @@ export default function App() {
             >
               إضافة طلب
             </button>
+            {isAdmin && (
+              <button className={page === "users" ? "active" : ""} aria-current={page === "users" ? "page" : undefined}
+                onClick={() => navigate("users")}>المستخدمون</button>
+            )}
           </nav>
-          <span className="demo-badge">
-            <span aria-hidden="true">●</span> نسخة تعليمية
-          </span>
+          <div className="header-account">
+            <small><bdi>{user.name}</bdi> · {roleLabels[user.role]}</small>
+            <div>
+              <button className="text-button" aria-current={page === "profile" ? "page" : undefined}
+                onClick={() => navigate("profile")}>الملف الشخصي</button>
+              <button className="text-button" disabled={loggingOut} onClick={signOut}>تسجيل الخروج</button>
+            </div>
+          </div>
         </div>
+        {logoutError && <p role="alert" className="field-error">{logoutError}</p>}
       </header>
       <main id="main" tabIndex={-1}>
         <div className="workspace-line">
@@ -155,11 +183,14 @@ export default function App() {
           <OrderDetails
             key={selectedId}
             order={order || resource.result.data}
+            isAdmin={isAdmin}
             onUpdate={updateOrder}
             onStatus={updateStatus}
             onBack={() => navigate("orders")}
           />
         )}
+        {page === "profile" && <ProfilePage />}
+        {page === "users" && isAdmin && <UsersPage />}
         <div className="session-note">
           <span aria-hidden="true">ⓘ</span>
           <p>

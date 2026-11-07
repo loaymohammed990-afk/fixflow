@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../auth/useAuth";
 
 const emptyOrder = {
   customerName: "",
@@ -10,12 +11,18 @@ const emptyOrder = {
 };
 
 export default function OrderForm({ order, onSave, onCancel }) {
+  const { markOrderDirty } = useAuth();
   const [values, setValues] = useState(() => Object.fromEntries(Object.keys(emptyOrder).map(key => [key, order?.[key] || ""])));
   const [errors, setErrors] = useState({});
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const inFlight = useRef(false);
+  const dirty = Object.keys(emptyOrder).some(key => values[key] !== (order?.[key] || ""));
+  useEffect(() => {
+    markOrderDirty(dirty);
+    return () => markOrderDirty(false);
+  }, [dirty, markOrderDirty]);
 
   function change(event) {
     const { name, value } = event.target;

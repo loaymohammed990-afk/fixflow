@@ -11,6 +11,7 @@ export function requireDatabase(req, res, next) {
 export function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
   let safe = error instanceof ApiError ? error : null;
+  if (!safe && error.code === 11000 && error.keyPattern?.email) safe = new ApiError(409, 'DUPLICATE_EMAIL', 'البريد الإلكتروني مستخدم بالفعل');
   if (!safe && error.code === 11000) safe = new ApiError(409, 'DUPLICATE_ORDER_ID', 'رقم الطلب موجود بالفعل');
   if (!safe && error.type === 'entity.parse.failed') safe = new ApiError(400, 'VALIDATION_ERROR', 'صيغة JSON غير صالحة');
   if (!safe && error.type === 'entity.too.large') safe = new ApiError(413, 'VALIDATION_ERROR', 'حجم البيانات أكبر من المسموح');

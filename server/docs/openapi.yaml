@@ -1,17 +1,266 @@
 openapi: 3.0.3
 info:
   title: FixFlow Local API
-  version: 1.0.0
-  description: واجهة تعليمية محلية ببيانات وهمية. لا مصادقة؛ التشغيل على loopback فقط.
+  version: 1.2.0
+  description: |
+    تستخدم المسارات المحمية جلسة MongoDB وملف ارتباط HttpOnly باسم fixflow.sid.
+    احصل على CSRF من GET /auth/csrf ثم مرّره في X-CSRF-Token عند الدخول.
+    استخدم الرمز الجديد الذي يعيده تسجيل الدخول في كل عملية كتابة.
+    المدير والموظف يديران الطلبات، وإلغاء الطلب أو تعديل طلب ملغى وإدارة المستخدمين للمدير.
+    الحساب الذي يحتاج تغيير كلمة المرور يستطيع قراءة ملفه وتغييرها والخروج.
 servers:
-  - url: http://127.0.0.1:4000/api/v1
+  - url: /api/v1
+security:
+  - sessionCookie: []
 tags:
+  - name: Auth
+  - name: Users
   - name: Orders
   - name: Dashboard
   - name: Health
 paths:
+  /auth/csrf:
+    get:
+      tags: [Auth]
+      summary: جلب رمز CSRF للجلسة الحالية أو بدء جلسة مجهولة
+      security: []
+      responses:
+        "200":
+          description: رمز صالح للجلسة الحالية
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: يُرسل عند بدء جلسة جديدة.
+          content:
+            application/json:
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data: { csrfToken: "<csrf-token>" }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: تسجيل الدخول وتجديد الجلسة ورمز CSRF
+      security:
+        - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password, maxLength: 1024 }
+            example: { email: "admin@example.test", password: "<password>" }
+      responses:
+        "200":
+          description: جلسة جديدة
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: fixflow.sid مع HttpOnly وSameSite=Lax، وSecure في الإنتاج.
+          content:
+            application/json:
+              example:
+                success: true
+                message: تم تسجيل الدخول بنجاح
+                data:
+                  user: &safeUser
+                    id: "690a1234567890abcdef1234"
+                    name: مستخدم تجريبي
+                    email: admin@example.test
+                    role: admin
+                    isActive: true
+                    mustChangePassword: false
+                  csrfToken: "<new-csrf-token>"
+        "401":
+          description: بيانات الدخول غير صحيحة أو الحساب معطّل
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                success: false
+                error: { code: INVALID_CREDENTIALS, message: البريد الإلكتروني أو كلمة المرور غير صحيحة, details: [] }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429":
+          description: تجاوز عشر محاولات لكل عنوان IP خلال 15 دقيقة
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: بيانات الحساب في الجلسة الحالية
+      responses:
+        "200": &userResponse
+          description: بيانات الحساب
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: "#/components/schemas/User" }
+              example: { success: true, message: تمت العملية بنجاح, data: { user: *safeUser } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: إتلاف الجلسة ومسح ملف الارتباط
+      security: &sessionWrite
+        - sessionCookie: []
+          csrfToken: []
+      requestBody: &emptyJson
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+            example: {}
+      responses:
+        "200": { description: تم تسجيل الخروج }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: تغيير كلمة المرور وإبطال كل الجلسات السابقة
+      security: *sessionWrite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, format: password, maxLength: 1024 }
+                newPassword: { type: string, format: password, minLength: 12, maxLength: 1024 }
+            example: { currentPassword: "<current-password>", newPassword: "<new-long-passphrase>" }
+      responses:
+        "200": { description: تم التغيير ويلزم تسجيل الدخول من جديد }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { description: كلمة المرور الحالية خاطئة أو الجديدة غير صالحة }
+  /users:
+    get:
+      tags: [Users]
+      summary: قائمة المستخدمين للمدير
+      responses:
+        "200":
+          description: قائمة الحسابات
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { type: array, items: { $ref: "#/components/schemas/User" } }
+              example: { success: true, message: تمت العملية بنجاح, data: [*safeUser] }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Users]
+      summary: إنشاء حساب وإصدار كلمة مرور مؤقتة للمدير
+      security: *sessionWrite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, email]
+              properties:
+                name: { type: string, maxLength: 100 }
+                email: { type: string, format: email, maxLength: 254 }
+                role: { type: string, enum: [admin, staff], default: staff }
+            example: { name: موظف تجريبي, email: staff@example.test, role: staff }
+      responses:
+        "201": &temporaryResponse
+          description: كلمة المرور المؤقتة في هذه الاستجابة فقط
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: "#/components/schemas/User" }
+                      temporaryPassword: { type: string }
+              example:
+                success: true
+                message: تمت العملية بنجاح
+                data:
+                  user:
+                    id: "690a1234567890abcdef1235"
+                    name: موظف تجريبي
+                    email: staff@example.test
+                    role: staff
+                    isActive: true
+                    mustChangePassword: true
+                  temporaryPassword: "<one-time-password>"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: البريد مستخدم بالفعل }
+        "422": { description: مدخلات غير صالحة }
+  /users/{id}:
+    parameters:
+      - &userId
+        name: id
+        in: path
+        required: true
+        schema: { type: string, pattern: "^[a-fA-F0-9]{24}$" }
+    patch:
+      tags: [Users]
+      summary: تغيير الدور أو تفعيل الحساب أو تعطيله للمدير
+      security: *sessionWrite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                role: { type: string, enum: [admin, staff] }
+                isActive: { type: boolean }
+            example: { isActive: false }
+      responses:
+        "200": *userResponse
+        "400": { description: معرّف غير صالح }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: المستخدم غير موجود }
+        "409": { description: آخر مدير نشط أو تعديل متزامن للحسابات }
+        "422": { description: مدخلات غير صالحة }
+  /users/{id}/reset-password:
+    parameters: [*userId]
+    post:
+      tags: [Users]
+      summary: إعادة ضبط كلمة المرور وإبطال الجلسات للمدير
+      security: *sessionWrite
+      requestBody: *emptyJson
+      responses:
+        "200": *temporaryResponse
+        "400": { description: معرّف غير صالح }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: المستخدم غير موجود }
   /health:
     get:
+      security: []
       tags:
         - Health
       summary: جاهزية قاعدة البيانات
@@ -70,6 +319,7 @@ paths:
         - Orders
       summary: الحالات الخمس بالترتيب
       responses:
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "200":
           description: نجاح
           content:
@@ -164,6 +414,7 @@ paths:
             maximum: 100
             default: 10
       responses:
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "200":
           description: نجاح
           content:
@@ -242,6 +493,7 @@ paths:
       tags:
         - Orders
       summary: إنشاء طلب
+      security: *sessionWrite
       requestBody:
         required: true
         content:
@@ -256,6 +508,7 @@ paths:
               serialNumber: SN-DEMO
               problem: الشاشة مكسورة
       responses:
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "201":
           description: نجاح
           content:
@@ -381,6 +634,7 @@ paths:
         - Orders
       summary: تفاصيل طلب
       responses:
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "200":
           description: نجاح
           content:
@@ -455,6 +709,7 @@ paths:
       tags:
         - Orders
       summary: تعديل الحقول الستة فقط
+      security: *sessionWrite
       requestBody:
         required: true
         content:
@@ -464,6 +719,7 @@ paths:
             example:
               problem: تم فحص الشاشة
       responses:
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "200":
           description: نجاح
           content:
@@ -589,6 +845,7 @@ paths:
       tags:
         - Orders
       summary: تغيير الحالة؛ يعيد الطلب كاملًا
+      security: *sessionWrite
       requestBody:
         required: true
         content:
@@ -598,6 +855,7 @@ paths:
             example:
               status: جاهز للتسليم
       responses:
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "200":
           description: نجاح
           content:
@@ -716,12 +974,13 @@ paths:
                   code: DATABASE_UNAVAILABLE
                   message: قاعدة البيانات غير متاحة، حاول مجددًا
                   details: []
-  /dashboard/summary:
+  /dashboard/summary: &summaryPath
     get:
       tags:
         - Dashboard
       summary: الإجمالي والحالات وآخر خمسة طلبات
       responses:
+        "401": { $ref: "#/components/responses/Unauthenticated" }
         "200":
           description: نجاح
           content:
@@ -777,8 +1036,48 @@ paths:
                   code: DATABASE_UNAVAILABLE
                   message: قاعدة البيانات غير متاحة، حاول مجددًا
                   details: []
+  /dashboard/summary1: *summaryPath
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: fixflow.sid
+      description: يحفظ المتصفح ملف الارتباط من Set-Cookie تلقائيًا.
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: خذ الرمز من GET /auth/csrf وحدّثه بالرمز الجديد بعد الدخول.
+  responses:
+    Unauthenticated:
+      description: الجلسة مفقودة أو منتهية أو مبطلة
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: { code: UNAUTHENTICATED, message: يرجى تسجيل الدخول, details: [] }
+    Forbidden:
+      description: الصلاحية مرفوضة أو تغيير كلمة المرور مطلوب أو فشل التحقق من CSRF أو Origin
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: { code: FORBIDDEN, message: ليست لديك صلاحية, details: [] }
   schemas:
+    User:
+      type: object
+      required: [id, name, email, role, isActive, mustChangePassword]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, staff] }
+        isActive: { type: boolean }
+        mustChangePassword: { type: boolean }
+        lastLoginAt: { type: string, format: date-time }
     CreateOrderRequest:
       type: object
       additionalProperties: false
@@ -1056,6 +1355,19 @@ components:
                 - DATABASE_UNAVAILABLE
                 - INVALID_ORDER_ID
                 - NOT_FOUND
+                - UNAUTHENTICATED
+                - INVALID_CREDENTIALS
+                - FORBIDDEN
+                - PASSWORD_CHANGE_REQUIRED
+                - INVALID_CSRF
+                - TOO_MANY_ATTEMPTS
+                - INVALID_CURRENT_PASSWORD
+                - PASSWORD_UNCHANGED
+                - DUPLICATE_EMAIL
+                - INVALID_USER_ID
+                - USER_NOT_FOUND
+                - USER_UPDATE_IN_PROGRESS
+                - LAST_ADMIN
             message:
               type: string
             details:
